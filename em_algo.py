@@ -4,6 +4,99 @@ import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 
 
+use_sklearn = False
+
+class GaussianMixtureModel_ByHand:
+    def __init__(self, n_components=2, max_iter=100, tol=1e-3):
+        self.n_components = n_components
+        self.max_iter = max_iter
+        self.tol = tol
+        
+    def initialize_parameters(self, X):
+        """Initialize the model parameters"""
+        n_samples, n_features = X.shape
+        
+        # Randomly initialize means
+        random_idx = np.random.permutation(n_samples)[:self.n_components]
+        self.means = X[random_idx]
+        
+        # Initialize covariances
+        self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)])
+        
+        # Initialize mixing coefficients (weights)
+        self.weights = np.ones(self.n_components) / self.n_components
+        
+    def gaussian_pdf(self, X, mean, cov):
+        """Compute gaussian probability density function"""
+        n_features = X.shape[1]
+        det = np.linalg.det(cov)
+        if det == 0:
+            det = np.finfo(float).eps
+            
+        norm_const = 1.0 / (np.power(2 * np.pi, n_features/2) * np.sqrt(det))
+        inv_cov = np.linalg.inv(cov)
+        
+        X_mu = X - mean
+        exp = -0.5 * np.sum(X_mu.dot(inv_cov) * X_mu, axis=1)
+        
+        return norm_const * np.exp(exp)
+    
+    def e_step(self, X):
+        """Expectation step: compute responsibilities"""
+        n_samples = X.shape[0]
+        resp = np.zeros((n_samples, self.n_components))
+        
+        # Compute probabilities for each component
+        for k in range(self.n_components):
+            resp[:, k] = self.weights[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
+            
+        # Normalize responsibilities
+        resp_sum = resp.sum(axis=1)[:, np.newaxis]
+        resp_sum[resp_sum == 0] = np.finfo(float).eps
+        resp = resp / resp_sum
+        
+        return resp
+    
+    def m_step(self, X, resp):
+        """Maximization step: update parameters"""
+        n_samples = X.shape[0]
+        
+        # Update weights
+        nk = resp.sum(axis=0)
+        self.weights = nk / n_samples
+        
+        # Update means
+        self.means = resp.T.dot(X) / nk[:, np.newaxis]
+        
+        # Update covariances
+        for k in range(self.n_components):
+            X_mu = X - self.means[k]
+            self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k]
+            
+            # Add small value to diagonal for numerical stability
+            self.covs[k].flat[::X.shape[1] + 1] += 1e-6
+    
+    def fit(self, X):
+        """Fit the model to the data"""
+        # Initialize parameters
+        self.initialize_parameters(X)
+        
+        for iteration in range(self.max_iter):
+            # E-step
+            resp = self.e_step(X)
+            
+            # M-step
+            self.m_step(X, resp)
+            
+        return self
+    
+    def predict(self, X):
+        """Predict cluster labels"""
+        resp = self.e_step(X)
+        return resp.argmax(axis=1)
+
+
+
 
 def GMM (original_image_path):
 
@@ -15,7 +108,12 @@ def GMM (original_image_path):
 
     # 2 components foreground and background so the return is either 0 or 1
     # takes a 2D array were each row is a pixel and each column is a feature (color channel)
-    gmm = GaussianMixture(n_components=2, random_state=0)
+    if use_sklearn:
+        print("Using sklearn ...")
+        gmm = GaussianMixture(n_components=2, random_state=0)
+    else:
+        print("Using custom implementation ...")
+        gmm = GaussianMixtureModel_ByHand(n_components=2, max_iter=100)
     gmm.fit(pixels)
     labels = gmm.predict(pixels)
     foreground_label = 1
