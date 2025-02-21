@@ -16,7 +16,7 @@ class GaussianMixtureModel_ByHand:
         """Initialize the model parameters"""
         n_samples, n_features = X.shape
         
-        # Randomly initialize means
+        # Randomly initialize means by selecting a random sample from the data as the mean
         random_idx = np.random.permutation(n_samples)[:self.n_components]
         self.means = X[random_idx]
         
