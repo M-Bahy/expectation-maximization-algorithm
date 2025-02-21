@@ -131,11 +131,11 @@ class GaussianMixtureModel_ByHand:
         n_samples = X.shape[0]
         
         # Update mixing_coefficients
-        nk = resp.sum(axis=0)
-        self.mixing_coefficients = nk / n_samples
+        nk = resp.sum(axis=0) # sum of each column
+        self.mixing_coefficients = nk / n_samples # number of pixels in each class / total number of pixels
         
         # Update means
-        self.means = resp.T.dot(X) / nk[:, np.newaxis]
+        self.means = resp.T.dot(X) / nk[:, np.newaxis] 
         
         # Update covariances
         for k in range(self.n_components):
@@ -166,8 +166,10 @@ class GaussianMixtureModel_ByHand:
         
         for iteration in range(self.max_iter):
             # E-step
-            resp = self.e_step(X)
-            
+            resp = self.e_step(X) 
+            # this returns a 2D array , the rows are the pixels and the columns are the classes
+            # each value is the probability of this pixel to belong to that class
+
             # M-step
             self.m_step(X, resp)
             
