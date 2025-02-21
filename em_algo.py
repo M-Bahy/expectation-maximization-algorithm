@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 
 
-use_sklearn = True
+use_sklearn = False
 
 class GaussianMixtureModel_ByHand:
     def __init__(self, n_components=2, max_iter=100):
