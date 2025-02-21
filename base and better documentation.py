@@ -4,30 +4,65 @@ import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 
 
-use_sklearn = True
+use_sklearn = False
 picture = 2
 
 class GaussianMixtureModel_ByHand:
+    """
+    Gaussian Mixture Model implementation for image segmentation.
+    
+    This class implements the Expectation-Maximization (EM) algorithm 
+    
+    Parameters:
+        n_components (int): Number of classes(default=2 for foreground/background)
+        max_iter (int): Maximum number of iterations (default=100)
+    """
     def __init__(self, n_components=2, max_iter=100):
         self.n_components = n_components
         self.max_iter = max_iter
         
     def initialize_parameters(self, X):
-        """Initialize the model parameters"""
+        """
+        Initialize model parameters randomly from the data.
+        
+        Args:
+            X: Array of shape (n_pixels, n_features) where each row is a pixel's RGB values
+        
+        Sets:
+            self.means: Initial cluster centers, randomly chosen from data points
+            self.covs: Initial covariance matrices (identity matrix for each component)
+            self.mixing_coefficients: Initial cluster probabilities (uniform)
+        """
         n_samples, n_features = X.shape
         
         # Randomly initialize means by selecting a random sample from the data as the mean
-        random_idx = np.random.permutation(n_samples)[:self.n_components]
-        self.means = X[random_idx]
+        random_idx = np.random.permutation(n_samples)[:self.n_components] # 2 random indices
+        self.means = X[random_idx] # 2 random pixels , each pixel has 3 values (RGB) . This is the mean of each feature in the 2 classes
         
         # Initialize covariances
-        self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)])
+        self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)]) # 3 identity matrices X 2 classes
         
         # Initialize mixing coefficients (mixing_coefficients)
-        self.mixing_coefficients = np.ones(self.n_components) / self.n_components
+        self.mixing_coefficients = [1/self.n_components] * self.n_components # 2 classes , each class has a probability of 0.5
         
     def gaussian_pdf(self, X, mean, cov):
-        """Compute gaussian probability density function"""
+        """
+        Compute multivariate Gaussian probability density function.
+        
+        Args:
+            X: Array of shape (n_pixels, n_features) containing pixel values
+            mean: Mean vector of the Gaussian
+            cov: Covariance matrix of the Gaussian
+            
+        Returns:
+            Array of probabilities for each pixel belonging to this Gaussian
+            
+        Notes:
+            1. Computes determinant and inverse of covariance matrix
+            2. Applies the formula: p(x) = 1/sqrt((2π)^d|Σ|) * exp(-0.5(x-μ)ᵀΣ⁻¹(x-μ))
+            3. Handles numerical stability for determinant
+        """
+        # this is a per class function , it calculates the probability of each pixel to belong to this class
         n_features = X.shape[1]
         det = np.linalg.det(cov)
         if det == 0:
@@ -42,23 +77,57 @@ class GaussianMixtureModel_ByHand:
         return norm_const * np.exp(exp)
     
     def e_step(self, X):
-        """Expectation step: compute responsibilities"""
+        """
+        Expectation step: compute probability of each pixel belonging to each cluster.
+        
+        Args:
+            X: Array of pixel values
+            
+        Returns:
+            resp: Responsibility matrix of shape (n_pixels, n_components)
+                 resp[i,j] = probability that pixel i belongs to cluster j
+                 
+        Process:
+            1. For each component k:
+               - Compute p(x|k) using gaussian_pdf
+               - Multiply by mixing coefficient πₖ
+            2. Normalize probabilities to sum to 1 for each pixel
+        """
         n_samples = X.shape[0]
         resp = np.zeros((n_samples, self.n_components))
         
         # Compute probabilities for each component
-        for k in range(self.n_components):
+        for k in range(self.n_components): # sets the values in each column
             resp[:, k] = self.mixing_coefficients[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
             
         # Normalize responsibilities
-        resp_sum = resp.sum(axis=1)[:, np.newaxis]
-        resp_sum[resp_sum == 0] = np.finfo(float).eps
-        resp = resp / resp_sum
+        resp_sum = resp.sum(axis=1)[:, np.newaxis] # sum of each row
+        resp_sum[resp_sum == 0] = np.finfo(float).eps # if the sum is 0 , set it to a very small number
+        resp = resp / resp_sum # divide each value by the sum of its row
         
         return resp
     
     def m_step(self, X, resp):
-        """Maximization step: update parameters"""
+        """
+        Maximization step: update model parameters based on current responsibilities.
+        
+        Args:
+            X: Array of pixel values
+            resp: Responsibility matrix from E-step
+            
+        Updates:
+            1. mixing_coefficients: New cluster probabilities (πₖ)
+               πₖ = number of pixels in cluster k / total pixels
+            
+            2. means: New cluster centers (μₖ)
+               μₖ = weighted average of pixels, weights = responsibilities
+            
+            3. covs: New covariance matrices (Σₖ)
+               Σₖ = weighted covariance of pixels around mean
+            
+        Notes:
+            Adds small constant to covariance diagonal for stability
+        """
         n_samples = X.shape[0]
         
         # Update mixing_coefficients
@@ -77,7 +146,21 @@ class GaussianMixtureModel_ByHand:
             self.covs[k].flat[::X.shape[1] + 1] += 1e-6
     
     def fit(self, X):
-        """Fit the model to the data"""
+        """
+        Fit the GMM to the pixel data using EM algorithm.
+        
+        Args:
+            X: Array of pixel values
+            
+        Process:
+            1. Initialize parameters randomly
+            2. Repeat until convergence or max_iter:
+               - E-step: compute responsibilities
+               - M-step: update parameters
+               
+        Returns:
+            self: Trained model
+        """
         # Initialize parameters
         self.initialize_parameters(X)
         
@@ -91,7 +174,16 @@ class GaussianMixtureModel_ByHand:
         return self
     
     def predict(self, X):
-        """Predict cluster labels"""
+        """
+        Predict cluster assignments for pixels.
+        
+        Args:
+            X: Array of pixel values
+            
+        Returns:
+            Array of cluster labels (0 or 1) for each pixel,
+            assigned to the component with highest responsibility
+        """
         resp = self.e_step(X)
         return resp.argmax(axis=1)
 
