@@ -23,8 +23,8 @@ class GaussianMixtureModel_ByHand:
         # Initialize covariances
         self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)])
         
-        # Initialize mixing coefficients (weights)
-        self.weights = np.ones(self.n_components) / self.n_components
+        # Initialize mixing coefficients (mixing_coefficients)
+        self.mixing_coefficients = np.ones(self.n_components) / self.n_components
         
     def gaussian_pdf(self, X, mean, cov):
         """Compute gaussian probability density function"""
@@ -48,7 +48,7 @@ class GaussianMixtureModel_ByHand:
         
         # Compute probabilities for each component
         for k in range(self.n_components):
-            resp[:, k] = self.weights[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
+            resp[:, k] = self.mixing_coefficients[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
             
         # Normalize responsibilities
         resp_sum = resp.sum(axis=1)[:, np.newaxis]
@@ -61,9 +61,9 @@ class GaussianMixtureModel_ByHand:
         """Maximization step: update parameters"""
         n_samples = X.shape[0]
         
-        # Update weights
+        # Update mixing_coefficients
         nk = resp.sum(axis=0)
-        self.weights = nk / n_samples
+        self.mixing_coefficients = nk / n_samples
         
         # Update means
         self.means = resp.T.dot(X) / nk[:, np.newaxis]
