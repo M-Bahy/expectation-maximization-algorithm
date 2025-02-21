@@ -155,5 +155,5 @@ def GMM (original_image_path):
     plt.show()
 
 if __name__ == "__main__":
-    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/model.jpg"
+    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/by_hand.jpg"
     GMM(original_image_path)
