@@ -7,7 +7,7 @@ from sklearn.mixture import GaussianMixture
 use_sklearn = False
 
 class GaussianMixtureModel_ByHand:
-    def __init__(self, k=2, max_iter=10):
+    def __init__(self, k=2, max_iter=50):
         self.k = k  # number of components
         self.max_iter = max_iter
         
@@ -187,5 +187,5 @@ def GMM (original_image_path):
     plt.show()
 
 if __name__ == "__main__":
-    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/model.jpg"
+    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/by_hand.jpg"
     GMM(original_image_path)
