@@ -5,7 +5,7 @@ from sklearn.mixture import GaussianMixture
 
 
 use_sklearn = False
-picture = 2
+picture = 1
 
 class GaussianMixtureModel_ByHand:
     """
@@ -134,15 +134,38 @@ class GaussianMixtureModel_ByHand:
         nk = resp.sum(axis=0) # sum of each column
         self.mixing_coefficients = nk / n_samples # number of pixels in each class / total number of pixels
         
-        # Update means
+        # Update means , weighted average based on the probabilities
+        """
+                X = [                  resp = [
+            [R1,G1,B1],           [0.9, 0.1],  # Pixel 1
+            [R2,G2,B2],           [0.8, 0.2],  # Pixel 2
+            [R3,G3,B3]            [0.1, 0.9]   # Pixel 3
+        ]                     ]
+        
+        nk = [1.8, 1.2]  # Sum of responsibilities for each component
+        
+        means = [
+            [
+            (0.9*R1 + 0.8*R2 + 0.1*R3)/1.8,
+            (0.9*G1 + 0.8*G2 + 0.1*G3)/1.8,
+            (0.9*B1 + 0.8*B2 + 0.1*B3)/1.8
+            ],  # Component 1
+
+            [
+            (0.1*R1 + 0.2*R2 + 0.9*R3)/1.2,
+            (0.1*G1 + 0.2*G2 + 0.9*G3)/1.2,
+            (0.1*B1 + 0.2*B2 + 0.9*B3)/1.2
+            ]   # Component 2
+        ]
+        """
         self.means = resp.T.dot(X) / nk[:, np.newaxis] 
         
         # Update covariances
         for k in range(self.n_components):
             X_mu = X - self.means[k]
-            self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k]
+            self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k] # weighted covariance of pixels
             
-            # Add small value to diagonal for numerical stability
+            # Add small value to diagonal for numerical stability & Prevents overfitting to exact color values
             self.covs[k].flat[::X.shape[1] + 1] += 1e-6
     
     def fit(self, X):
@@ -187,7 +210,7 @@ class GaussianMixtureModel_ByHand:
             assigned to the component with highest responsibility
         """
         resp = self.e_step(X)
-        return resp.argmax(axis=1)
+        return resp.argmax(axis=1) # returns the index (0 or 1) of the max value in each row
 
 
 
