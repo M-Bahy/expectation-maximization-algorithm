@@ -15,7 +15,6 @@ def GMM (original_image_path):
 
     # 2 components foreground and background so the return is either 0 or 1
     # takes a 2D array were each row is a pixel and each column is a feature (color channel)
-    # the model parameter are initialized randomly so the result may vary each time you run the code
     gmm = GaussianMixture(n_components=2, random_state=0)
     gmm.fit(pixels)
     labels = gmm.predict(pixels)
