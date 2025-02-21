@@ -2,6 +2,8 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
+from random import choice
+
 
 
 use_sklearn = False
@@ -11,19 +13,21 @@ class GaussianMixtureModel_ByHand:
         self.n_components = n_components
         self.max_iter = max_iter
         
+    def create_identity_matrix(self,size):
+        return [[1.0 if i == j else 0.0 for j in range(size)] for i in range(size)]
+
     def initialize_parameters(self, X):
         """Initialize the model parameters"""
         n_samples, n_features = X.shape
         
-        # Randomly initialize means by selecting a random sample from the data as the mean
-        random_idx = np.random.permutation(n_samples)[:self.n_components]
+        indices = list(range(n_samples))
+        random_idx = [choice(indices) for _ in range(self.n_components)]
         self.means = X[random_idx]
         
-        # Initialize covariances
-        self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)])
+        # In initialize_parameters method, replace the covariance initialization line with:
+        self.covs = [self.create_identity_matrix(n_features) for _ in range(self.n_components)]
         
-        # Initialize mixing coefficients (mixing_coefficients)
-        self.mixing_coefficients = np.ones(self.n_components) / self.n_components
+        self.mixing_coefficients = [1.0/self.n_components] * self.n_components
         
     def gaussian_pdf(self, X, mean, cov):
         """Compute gaussian probability density function"""
