@@ -166,6 +166,7 @@ class GaussianMixtureModel_ByHand:
             self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k] # weighted covariance of pixels
             
             # Add small value to diagonal for numerical stability & Prevents overfitting to exact color values
+            # default value is 1e-6 , set it to 0.1 for more smoothing in the segmentation
             self.covs[k].flat[::X.shape[1] + 1] += 1e-6
     
     def fit(self, X):
