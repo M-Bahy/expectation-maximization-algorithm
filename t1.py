@@ -3,81 +3,147 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 from random import choice
-
-
+from math import pi, sqrt, exp
 
 use_sklearn = False
+
+def det_matrix(matrix):
+    """Calculate determinant of a 2D matrix"""
+    if len(matrix) == 1:
+        return matrix[0][0]
+    if len(matrix) == 2:
+        return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+    det = 0
+    for i in range(len(matrix)):
+        minor = [row[:i] + row[i+1:] for row in matrix[1:]]
+        det += ((-1) ** i) * matrix[0][i] * det_matrix(minor)
+    return det
+
+def inverse_matrix(matrix):
+    """Calculate inverse of a matrix"""
+    n = len(matrix)
+    # Create augmented matrix [matrix | I]
+    aug = [[matrix[i][j] for j in range(n)] + [1 if i == j else 0 for j in range(n)] for i in range(n)]
+    
+    # Gaussian elimination
+    for i in range(n):
+        pivot = aug[i][i]
+        for j in range(2*n):
+            aug[i][j] = aug[i][j] / pivot
+        for k in range(n):
+            if k != i:
+                factor = aug[k][i]
+                for j in range(2*n):
+                    aug[k][j] -= factor * aug[i][j]
+    
+    # Extract right half (inverse matrix)
+    return [[aug[i][j+n] for j in range(n)] for i in range(n)]
+
+def create_identity_matrix(size):
+    return [[1.0 if i == j else 0.0 for j in range(size)] for i in range(size)]
 
 class GaussianMixtureModel_ByHand:
     def __init__(self, n_components=2, max_iter=100):
         self.n_components = n_components
         self.max_iter = max_iter
-        
-    def create_identity_matrix(self,size):
-        return [[1.0 if i == j else 0.0 for j in range(size)] for i in range(size)]
 
     def initialize_parameters(self, X):
         """Initialize the model parameters"""
-        n_samples, n_features = X.shape
+        n_samples = len(X)
+        n_features = len(X[0])
         
         indices = list(range(n_samples))
         random_idx = [choice(indices) for _ in range(self.n_components)]
-        self.means = X[random_idx]
+        self.means = [X[idx] for idx in random_idx]
         
-        # In initialize_parameters method, replace the covariance initialization line with:
-        self.covs = [self.create_identity_matrix(n_features) for _ in range(self.n_components)]
+        # Initialize covariance matrices as identity matrices
+        self.covs = [create_identity_matrix(n_features) for _ in range(self.n_components)]
         
         self.mixing_coefficients = [1.0/self.n_components] * self.n_components
         
-    def gaussian_pdf(self, X, mean, cov):
-        """Compute gaussian probability density function"""
-        n_features = X.shape[1]
-        det = np.linalg.det(cov)
-        if det == 0:
-            det = np.finfo(float).eps
-            
-        norm_const = 1.0 / (np.power(2 * np.pi, n_features/2) * np.sqrt(det))
-        inv_cov = np.linalg.inv(cov)
-        
-        X_mu = X - mean
-        exp = -0.5 * np.sum(X_mu.dot(inv_cov) * X_mu, axis=1)
-        
-        return norm_const * np.exp(exp)
-    
     def e_step(self, X):
         """Expectation step: compute responsibilities"""
-        n_samples = X.shape[0]
-        resp = np.zeros((n_samples, self.n_components))
+        n_samples = len(X)
+        # Initialize responsibilities as list of lists
+        resp = [[0.0] * self.n_components for _ in range(n_samples)]
         
         # Compute probabilities for each component
         for k in range(self.n_components):
-            resp[:, k] = self.mixing_coefficients[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
-            
+            probs = self.gaussian_pdf(X, self.means[k], self.covs[k])
+            for i in range(n_samples):
+                resp[i][k] = self.mixing_coefficients[k] * probs[i]
+        
         # Normalize responsibilities
-        resp_sum = resp.sum(axis=1)[:, np.newaxis]
-        resp_sum[resp_sum == 0] = np.finfo(float).eps
-        resp = resp / resp_sum
+        for i in range(n_samples):
+            row_sum = sum(resp[i])
+            if row_sum == 0:
+                row_sum = 1e-10  # Small constant for numerical stability
+            resp[i] = [r / row_sum for r in resp[i]]
         
         return resp
     
+    def gaussian_pdf(self, X, mean, cov):
+        """Compute gaussian probability density function"""
+        n_features = len(X[0])
+        det = det_matrix(cov)
+        if abs(det) < 1e-10:
+            det = 1e-10  # Small constant for numerical stability
+            
+        norm_const = 1.0 / ((2 * pi) ** (n_features/2) * sqrt(abs(det)))
+        inv_cov = inverse_matrix(cov)
+        
+        result = []
+        for x in X:
+            # Normalize x and mean to prevent overflow
+            x = [float(val) / 255.0 for val in x]  # Assuming 8-bit image values
+            mean = [float(val) / 255.0 for val in mean]
+            
+            x_mu = [x[i] - mean[i] for i in range(n_features)]
+            # Calculate (x-μ)ᵀΣ⁻¹(x-μ)
+            temp = [sum(a * b for a, b in zip(x_mu, col)) for col in zip(*inv_cov)]
+            exp_term = -0.5 * sum(a * b for a, b in zip(temp, x_mu))
+            
+            # Prevent underflow in exp
+            if exp_term < -700:  # log(min float)
+                exp_term = -700
+            result.append(float(norm_const * exp(exp_term)))
+        
+        return result
+    
     def m_step(self, X, resp):
         """Maximization step: update parameters"""
-        n_samples = X.shape[0]
+        n_samples = len(X)
+        n_features = len(X[0])
         
-        # Update mixing_coefficients
-        nk = resp.sum(axis=0)
-        self.mixing_coefficients = nk / n_samples
+        # Calculate nk (sum of responsibilities for each component)
+        nk = [sum(resp[i][k] for i in range(n_samples)) for k in range(self.n_components)]
+        
+        # Update mixing coefficients
+        self.mixing_coefficients = [n/n_samples for n in nk]
         
         # Update means
-        self.means = resp.T.dot(X) / nk[:, np.newaxis]
+        self.means = [[0.0] * n_features for _ in range(self.n_components)]
+        for k in range(self.n_components):
+            for j in range(n_features):
+                self.means[k][j] = sum(resp[i][k] * X[i][j] for i in range(n_samples)) / nk[k]
+        
+        # Initialize covariance matrices properly
+        self.covs = [[[0.0] * n_features for _ in range(n_features)] for _ in range(self.n_components)]
         
         # Update covariances
         for k in range(self.n_components):
-            X_mu = X - self.means[k]
-            self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k]
+            for i in range(n_features):
+                for j in range(n_features):
+                    sum_cov = 0.0
+                    for n in range(n_samples):
+                        diff_i = X[n][i] - self.means[k][i]
+                        diff_j = X[n][j] - self.means[k][j]
+                        sum_cov += resp[n][k] * diff_i * diff_j
+                    self.covs[k][i][j] = sum_cov / nk[k]
             
             # Add small value to diagonal for numerical stability
-            self.covs[k].flat[::X.shape[1] + 1] += 1e-6
+            for i in range(n_features):
+                self.covs[k][i][i] += 1e-6
     
     def fit(self, X):
         """Fit the model to the data"""
@@ -96,9 +162,8 @@ class GaussianMixtureModel_ByHand:
     def predict(self, X):
         """Predict cluster labels"""
         resp = self.e_step(X)
-        return resp.argmax(axis=1)
-
-
+        # Find index of max value for each sample
+        return [max(range(len(r)), key=lambda i: r[i]) for r in resp]
 
 
 def GMM (original_image_path):
