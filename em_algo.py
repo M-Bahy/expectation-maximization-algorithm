@@ -19,11 +19,12 @@ gmm = GaussianMixture(n_components=2, random_state=0)
 gmm.fit(pixels)
 labels = gmm.predict(pixels)
 
-# Determine which cluster is the foreground (smaller cluster)
-if np.sum(labels) < len(labels) / 2:
-    foreground_label = 1
-else:
-    foreground_label = 0
+# # Determine which cluster is the foreground (smaller cluster)
+# if np.sum(labels) < len(labels) / 2: # sum of all the ones in the labels < half the data points
+#     foreground_label = 1
+# else:
+#     foreground_label = 0
+foreground_label = 1
 
 # Create the binary segmentation mask
 binary_mask = (labels == foreground_label).reshape(height, width)
