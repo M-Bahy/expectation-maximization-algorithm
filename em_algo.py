@@ -7,8 +7,8 @@ from sklearn.mixture import GaussianMixture
 use_sklearn = False
 
 class GaussianMixtureModel_ByHand:
-    def __init__(self, n_components=2, max_iter=100):
-        self.n_components = n_components
+    def __init__(self, k=2, max_iter=100):
+        self.k = k
         self.max_iter = max_iter
         
     def initialize_parameters(self, X):
@@ -16,38 +16,42 @@ class GaussianMixtureModel_ByHand:
         n_samples, n_features = X.shape
         
         # Randomly initialize means by selecting a random sample from the data as the mean
-        random_idx = np.random.permutation(n_samples)[:self.n_components]
+        random_idx = np.random.choice(n_samples, size=self.k, replace=False)
         self.means = X[random_idx]
         
-        # Initialize covariances
-        self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)])
+        # Initialize standard deviations (using dataset variance)
+        self.stds = np.array([np.std(X, axis=0) for _ in range(self.k)])
         
-        # Initialize mixing coefficients (mixing_coefficients)
-        self.mixing_coefficients = np.ones(self.n_components) / self.n_components
+        # Initialize mixing coefficients (weights)
+        self.mixing_coefficients = np.ones(self.k) / self.k
         
-    def gaussian_pdf(self, X, mean, cov):
+    def gaussian_pdf(self, X, mean, std):
         """Compute gaussian probability density function"""
         n_features = X.shape[1]
-        det = np.linalg.det(cov)
-        if det == 0:
-            det = np.finfo(float).eps
-            
-        norm_const = 1.0 / (np.power(2 * np.pi, n_features/2) * np.sqrt(det))
-        inv_cov = np.linalg.inv(cov)
         
+        # Add a small constant to std for numerical stability
+        std = std + 1e-6
+        
+        # Compute variance from std (square of std)
+        variance = std ** 2
+        
+        # Compute normalization constant
+        norm_const = 1.0 / (np.power(2 * np.pi, n_features/2) * np.prod(std))
+        
+        # Compute exponential term
         X_mu = X - mean
-        exp = -0.5 * np.sum(X_mu.dot(inv_cov) * X_mu, axis=1)
+        exp = -0.5 * np.sum((X_mu ** 2) / variance, axis=1)
         
         return norm_const * np.exp(exp)
     
     def e_step(self, X):
         """Expectation step: compute responsibilities"""
         n_samples = X.shape[0]
-        resp = np.zeros((n_samples, self.n_components))
+        resp = np.zeros((n_samples, self.k))
         
         # Compute probabilities for each component
-        for k in range(self.n_components):
-            resp[:, k] = self.mixing_coefficients[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
+        for i in range(self.k):
+            resp[:, i] = self.mixing_coefficients[i] * self.gaussian_pdf(X, self.means[i], self.stds[i])
             
         # Normalize responsibilities
         resp_sum = resp.sum(axis=1)[:, np.newaxis]
@@ -67,13 +71,14 @@ class GaussianMixtureModel_ByHand:
         # Update means
         self.means = resp.T.dot(X) / nk[:, np.newaxis]
         
-        # Update covariances
-        for k in range(self.n_components):
-            X_mu = X - self.means[k]
-            self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k]
+        # Update standard deviations
+        for i in range(self.k):
+            X_mu = X - self.means[i]
+            weighted_sq_diff = (X_mu ** 2) * resp[:, i][:, np.newaxis]
+            self.stds[i] = np.sqrt(np.sum(weighted_sq_diff, axis=0) / nk[i])
             
-            # Add small value to diagonal for numerical stability
-            self.covs[k].flat[::X.shape[1] + 1] += 1e-6
+            # Add small value for numerical stability
+            self.stds[i] += 1e-6
     
     def fit(self, X):
         """Fit the model to the data"""
@@ -112,7 +117,7 @@ def GMM (original_image_path):
         gmm = GaussianMixture(n_components=2)
     else:
         print("Using custom implementation ...")
-        gmm = GaussianMixtureModel_ByHand(n_components=2)
+        gmm = GaussianMixtureModel_ByHand(k=2)
     gmm.fit(pixels)
     labels = gmm.predict(pixels)
 
