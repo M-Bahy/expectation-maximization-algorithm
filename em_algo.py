@@ -7,92 +7,124 @@ from sklearn.mixture import GaussianMixture
 use_sklearn = False
 
 class GaussianMixtureModel_ByHand:
-    def __init__(self, n_components=2, max_iter=100):
-        self.n_components = n_components
+    def __init__(self, k=2, max_iter=10):
+        self.k = k  # number of components
         self.max_iter = max_iter
         
+    def compute_variance(self, X):
+        """Compute variance manually for each feature"""
+        mean = sum(X) / len(X)
+        squared_diff = [(x - mean)**2 for x in X]
+        variance = sum(squared_diff) / len(X)
+        return variance
+        
     def initialize_parameters(self, X):
-        """Initialize the model parameters"""
+        """Initialize model parameters manually"""
         n_samples, n_features = X.shape
         
-        # Randomly initialize means by selecting a random sample from the data as the mean
-        random_idx = np.random.permutation(n_samples)[:self.n_components]
-        self.means = X[random_idx]
+        # Randomly choose k points as initial means
+        random_indices = []
+        while len(random_indices) < self.k:
+            idx = int(np.random.random() * n_samples)
+            if idx not in random_indices:
+                random_indices.append(idx)
+        self.means = X[random_indices]
         
-        # Initialize covariances
-        self.covs = np.array([np.eye(n_features) for _ in range(self.n_components)])
+        # Initialize variances using dataset variance
+        variances = []
+        for feature in range(n_features):
+            feature_variance = self.compute_variance(X[:, feature])
+            variances.append(feature_variance)
+        self.variances = np.array([variances for _ in range(self.k)])
         
-        # Initialize mixing coefficients (mixing_coefficients)
-        self.mixing_coefficients = np.ones(self.n_components) / self.n_components
+        # Initialize mixing coefficients equally
+        self.mixing_coefficients = np.array([1.0/self.k] * self.k)
         
-    def gaussian_pdf(self, X, mean, cov):
-        """Compute gaussian probability density function"""
-        n_features = X.shape[1]
-        det = np.linalg.det(cov)
-        if det == 0:
-            det = np.finfo(float).eps
-            
-        norm_const = 1.0 / (np.power(2 * np.pi, n_features/2) * np.sqrt(det))
-        inv_cov = np.linalg.inv(cov)
+    def gaussian_pdf(self, x, mean, variance):
+        """Compute gaussian probability density manually"""
+        n_features = len(x)
         
-        X_mu = X - mean
-        exp = -0.5 * np.sum(X_mu.dot(inv_cov) * X_mu, axis=1)
+        # Add small number to avoid division by zero
+        variance = variance + 1e-6
         
-        return norm_const * np.exp(exp)
+        # Compute normalization constant
+        norm_const = 1.0
+        for std in np.sqrt(variance):
+            norm_const *= 1.0 / (np.sqrt(2 * np.pi) * std)
+        
+        # Compute exponential term
+        exp_term = 0
+        for i in range(n_features):
+            exp_term += ((x[i] - mean[i])**2) / (2 * variance[i])
+        
+        return norm_const * np.exp(-exp_term)
     
     def e_step(self, X):
         """Expectation step: compute responsibilities"""
         n_samples = X.shape[0]
-        resp = np.zeros((n_samples, self.n_components))
+        resp = np.zeros((n_samples, self.k))
         
-        # Compute probabilities for each component
-        for k in range(self.n_components):
-            resp[:, k] = self.mixing_coefficients[k] * self.gaussian_pdf(X, self.means[k], self.covs[k])
+        # For each data point
+        for i in range(n_samples):
+            # Compute probability for each component
+            for j in range(self.k):
+                resp[i,j] = self.mixing_coefficients[j] * \
+                           self.gaussian_pdf(X[i], self.means[j], self.variances[j])
             
-        # Normalize responsibilities
-        resp_sum = resp.sum(axis=1)[:, np.newaxis]
-        resp_sum[resp_sum == 0] = np.finfo(float).eps
-        resp = resp / resp_sum
-        
+            # Normalize to get responsibilities
+            total = sum(resp[i])
+            if total > 0:
+                resp[i] = resp[i] / total
+            else:
+                resp[i] = np.array([1.0/self.k] * self.k)
+                
         return resp
     
     def m_step(self, X, resp):
         """Maximization step: update parameters"""
-        n_samples = X.shape[0]
+        n_samples, n_features = X.shape
         
-        # Update mixing_coefficients
-        nk = resp.sum(axis=0)
+        # Update mixing coefficients
+        nk = np.sum(resp, axis=0)
         self.mixing_coefficients = nk / n_samples
         
         # Update means
-        self.means = resp.T.dot(X) / nk[:, np.newaxis]
+        for j in range(self.k):
+            numerator = np.zeros(n_features)
+            for i in range(n_samples):
+                numerator += resp[i,j] * X[i]
+            self.means[j] = numerator / nk[j]
         
-        # Update covariances
-        for k in range(self.n_components):
-            X_mu = X - self.means[k]
-            self.covs[k] = (X_mu.T * resp[:, k]).dot(X_mu) / nk[k]
-            
-            # Add small value to diagonal for numerical stability
-            self.covs[k].flat[::X.shape[1] + 1] += 1e-6
+        # Update variances
+        for j in range(self.k):
+            numerator = np.zeros(n_features)
+            for i in range(n_samples):
+                diff = X[i] - self.means[j]
+                numerator += resp[i,j] * (diff ** 2)
+            self.variances[j] = numerator / nk[j]
     
     def fit(self, X):
-        """Fit the model to the data"""
-        # Initialize parameters
+        """Fit the model to data"""
         self.initialize_parameters(X)
         
-        for iteration in range(self.max_iter):
+        for i in range(self.max_iter):
+            print("Iteration", i+1)
             # E-step
             resp = self.e_step(X)
-            
             # M-step
             self.m_step(X, resp)
-            
+        
         return self
     
     def predict(self, X):
-        """Predict cluster labels"""
+        print("Predicting ...")
+        """Predict cluster assignments"""
         resp = self.e_step(X)
-        return resp.argmax(axis=1)
+        labels = []
+        for r in resp:
+            max_prob = max(r)
+            labels.append(list(r).index(max_prob))
+        return np.array(labels)
 
 
 
@@ -112,7 +144,7 @@ def GMM (original_image_path):
         gmm = GaussianMixture(n_components=2)
     else:
         print("Using custom implementation ...")
-        gmm = GaussianMixtureModel_ByHand(n_components=2)
+        gmm = GaussianMixtureModel_ByHand()
     gmm.fit(pixels)
     labels = gmm.predict(pixels)
 
@@ -155,5 +187,5 @@ def GMM (original_image_path):
     plt.show()
 
 if __name__ == "__main__":
-    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/by_hand.jpg"
+    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/model.jpg"
     GMM(original_image_path)
