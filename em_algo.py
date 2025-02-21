@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 
 
-use_sklearn = False
+use_sklearn = True
 
 class GaussianMixtureModel_ByHand:
-    def __init__(self, n_components=2, max_iter=100, tol=1e-3):
+    def __init__(self, n_components=2, max_iter=100):
         self.n_components = n_components
         self.max_iter = max_iter
-        self.tol = tol
         
     def initialize_parameters(self, X):
         """Initialize the model parameters"""
@@ -110,13 +109,17 @@ def GMM (original_image_path):
     # takes a 2D array were each row is a pixel and each column is a feature (color channel)
     if use_sklearn:
         print("Using sklearn ...")
-        gmm = GaussianMixture(n_components=2, random_state=0)
+        gmm = GaussianMixture(n_components=2)
     else:
         print("Using custom implementation ...")
-        gmm = GaussianMixtureModel_ByHand(n_components=2, max_iter=100)
+        gmm = GaussianMixtureModel_ByHand(n_components=2)
     gmm.fit(pixels)
     labels = gmm.predict(pixels)
-    foreground_label = 1
+
+    if np.sum(labels) < len(labels) / 2:
+        foreground_label = 1
+    else:
+        foreground_label = 0
 
     # create an image with the same size as the original
     # put True/1 in the pixels that are labeled as foreground , False/0 otherwise
