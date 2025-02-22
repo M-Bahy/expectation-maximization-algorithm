@@ -5,7 +5,7 @@ from sklearn.mixture import GaussianMixture
 
 
 use_sklearn = False
-picture = 1
+# picture = 1
 
 class GaussianMixtureModel_ByHand:
     """
@@ -280,5 +280,5 @@ def GMM (original_image_path):
         plt.show()
 
 if __name__ == "__main__":
-    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/model.jpg" if picture == 1 else "/media/bahy/MEDO BAHY/CMS/Deep Learning/expectation-maximization-algorithm/Dataset/by_hand.jpg"
+    original_image_path = "/media/bahy/MEDO BAHY/CMS/Deep Learning/Assignment 1/expectation-maximization-algorithm/Dataset/model.jpg"
     GMM(original_image_path)
